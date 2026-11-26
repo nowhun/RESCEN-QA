@@ -74,6 +74,9 @@ h3.grp{scroll-margin-top:16px}
 .tag.new{background:var(--ink)}
 .tag.sm{white-space:nowrap;font-size:11px;padding:0 6px;margin-right:2px;vertical-align:1px}
 tr.star td.num a{background:var(--accent);color:var(--ink-fg)}
+.tag.sim-t{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+tr.sim td{background:var(--surface)}
+tr.sim td.num a{background:transparent;color:var(--accent);border:1px dashed var(--accent)}
 @media (max-width:600px){
  table.sum{table-layout:auto;min-width:0}
  table.sum col.c3,table.sum td.ans,table.sum th:nth-child(3){display:none}
@@ -96,7 +99,7 @@ tr.star td.num a{background:var(--accent);color:var(--ink-fg)}
 <div class="search" role="search">
 <label for="qsearch" class="sr">질문 검색</label>
 <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-<input id="qsearch" type="search" placeholder="질문 검색 (예: 밈, 진정성, 감정의 구조)" autocomplete="off" enterkeyhint="go">
+<input id="qsearch" type="search" placeholder="질문 검색 (예: 가짜, 숏폼, 약점) · 비슷한 질문도 찾아 줘요" autocomplete="off" enterkeyhint="go">
 </div>
 <p class="sres" id="sres" aria-live="polite" hidden></p>
 <nav class="toc" aria-label="분야 목차"><p class="toc-h">목차</p><ol><li><a href="#g1"><span class="tn">1.</span><span class="tt">주제와 범위</span><span class="tc">Q1–Q4</span></a></li><li><a href="#g2"><span class="tn">2.</span><span class="tt">역주행과 밈</span><span class="tc">Q5–Q9</span></a></li><li><a href="#g3"><span class="tn">3.</span><span class="tt">이론 적용</span><span class="tc">Q10–Q13</span></a></li><li><a href="#g4"><span class="tn">4.</span><span class="tt">비판적 검토</span><span class="tc">Q14–Q18</span></a></li><li><a href="#g5"><span class="tn">5.</span><span class="tt">까다로운 질문</span><span class="tc">Q19–Q21</span></a></li></ol></nav>
@@ -260,31 +263,97 @@ tr.star td.num a{background:var(--accent);color:var(--ink-fg)}
   var input=document.getElementById('qsearch'), res=document.getElementById('sres'), toc=document.querySelector('.toc');
   var groups=[].slice.call(document.querySelectorAll('h3.grp'));
   var rows=[].slice.call(document.querySelectorAll('table.sum tbody tr'));
-  // index: summary text + full answer text for each question
+  // 비슷한 말 사전: 검색어에 왼쪽 단어가 들어 있으면 오른쪽 단어로도 찾는다
+  var SYN=[
+    [['진짜','가짜','진심','조작','연출','꾸민','의도','진정'],['진정성','기획된']],
+    [['팬덤','리미네','팬들','응원'],['팬']],
+    [['곡','음악','노래','음원','멜로디'],['노래','음악']],
+    [['쇼츠','숏츠','틱톡','유튜브','sns','릴스','영상'],['숏폼','밈','유튜브']],
+    [['돈','수익','광고','마케팅','상업','홍보','장사'],['마케팅','상업적']],
+    [['약점','단점','한계','부족','문제점','아쉬운'],['약점','한계']],
+    [['근거','증거','데이터','조사','인터뷰','설문','통계','자료'],['근거','조사']],
+    [['세대','mz','20대','청년','젊은','요즘'],['청년','세대','감정의 구조']],
+    [['회귀','환생','판타지','웹소설'],['회귀물']],
+    [['신화','희망','노력','능력주의','기적','성공'],['신화','중소돌','희망']],
+    [['중소','작은','소속사','기획사'],['중소','기획사']],
+    [['차트','순위','멜론','1위','역주행'],['차트','1위','역주행']],
+    [['운동장','과거','예전','옛날','흙바닥','재조명'],['운동장','과거']],
+    [['거제','야호'],['거제','밈']],
+    [['이론','개념','윌리엄즈','문화주의','윌리엄스'],['문화주의','윌리엄즈']],
+    [['세르토','무단','침입','저항','놀이'],['무단침입']],
+    [['아도르노','캐릭터','개성','유사'],['유사 개성화','캐릭터']],
+    [['모순','반대','충돌','앞뒤'],['모순']],
+    [['따라','공식','방법','전략','다른 그룹'],['따라','공식']],
+    [['지속','계속','앞으로','이후','유행','반짝'],['이후','인기']],
+    [['감정','공감','감동','울'],['감정의 구조']],
+    [['헤게모니','그람시','바르트','구조'],['헤게모니','신화']],
+    [['범위','기간','다섯','5개월'],['범위']],
+    [['본인','개인','좋아'],['본인','팬']]
+  ];
+  var STOP=['왜','그','이','저','뭐','무엇','어떻게','하나요','있나요','없나요','아닌가요','인가요','건가요','되나요','나요','은','는','이','가','을','를','의','에','도','요','좀','혹시','거','것','아니에요','아니야','아닌','아니','같은데','같아요','있을까','할까','될까','건가','그냥','너무','정말','진짜로'];
   var data=rows.map(function(tr){
     var a=tr.querySelector('td.num a'), id=a.getAttribute('href').slice(1);
     var anchor=document.getElementById(id), txt='';
     if(anchor&&anchor.parentElement.tagName==='P')anchor=anchor.parentElement;
     for(var n=anchor&&anchor.nextElementSibling;n&&!(n.tagName==='P'&&n.classList.contains('back'));n=n.nextElementSibling){txt+=' '+n.textContent;}
     var qcell=tr.children[1];
-    return {tr:tr,a:a,qcell:qcell,orig:qcell.innerHTML,hay:(tr.textContent+' '+txt).toLowerCase()};
+    return {tr:tr,a:a,qcell:qcell,orig:qcell.innerHTML,head:tr.textContent.toLowerCase(),hay:(tr.textContent+' '+txt).toLowerCase()};
   });
   function esc(t){return t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+  function bigrams(w){var o=[];w=w.replace(/\s+/g,'');for(var i=0;i<w.length-1;i++)o.push(w.slice(i,i+2));return o;}
+  function expand(terms){
+    var out=[];
+    terms.forEach(function(t){SYN.forEach(function(s){if(s[0].some(function(k){return t.indexOf(k)>-1||k.indexOf(t)>-1&&t.length>=2;}))s[1].forEach(function(w){if(out.indexOf(w)<0&&terms.indexOf(w)<0)out.push(w);});});});
+    return out;
+  }
+  // 점수: 질문·한 줄 답에 있으면 더 높게, 본문에만 있으면 낮게. 단어가 통째로 없으면 두 글자 조각이 얼마나 겹치는지 본다
+  function score(d,terms,extra){
+    var s=0;
+    terms.forEach(function(t){
+      if(d.head.indexOf(t)>-1)s+=3;else if(d.hay.indexOf(t)>-1)s+=1.5;
+      else{var bg=bigrams(t);if(bg.length){var hit=bg.filter(function(b){return d.hay.indexOf(b)>-1;}).length;s+=hit/bg.length;}}
+    });
+    extra.forEach(function(w){if(d.head.indexOf(w)>-1)s+=3;else if(d.hay.indexOf(w)>-1)s+=1;});
+    return s;
+  }
+  function mark(d,words){
+    if(!words.length)return;
+    var re=new RegExp('('+words.map(esc).join('|')+')','gi');
+    d.qcell.childNodes.forEach(function(n){if(n.nodeType===3){var sp=document.createElement('span');sp.innerHTML=n.textContent.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}).replace(re,'<mark>$1</mark>');n.replaceWith(sp);}});
+  }
   function run(){
-    var q=input.value.trim().toLowerCase(), terms=q.split(/\s+/).filter(Boolean), shown=0, first=null;
+    var raw=input.value.trim().toLowerCase();
+    var terms=raw.split(/\s+/).filter(Boolean);
+    var keys=terms.map(function(t){return t.replace(/(은|는|이|가|을|를|의|에|도|요|이요|인가요|나요|하나요|있나요|아닌가요)$/,'');}).filter(function(t){return t&&STOP.indexOf(t)<0;});
+    if(!keys.length)keys=terms;
+    var extra=expand(keys), shown=0, simN=0, first=null, sims=[];
     data.forEach(function(d){
-      d.qcell.innerHTML=d.orig;
+      d.qcell.innerHTML=d.orig; d.tr.classList.remove('sim');
       var ok=terms.every(function(t){return d.hay.indexOf(t)>-1;});
       d.tr.hidden=!ok;
-      if(ok){shown++; if(!first)first=d;
-        if(terms.length){var re=new RegExp('('+terms.map(esc).join('|')+')','gi');
-          d.qcell.childNodes.forEach(function(n){if(n.nodeType===3){var s=document.createElement('span');s.innerHTML=n.textContent.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}).replace(re,'<mark>$1</mark>');n.replaceWith(s);}});}
-      }
+      if(ok){shown++; if(!first)first=d; mark(d,terms);}
+      else if(terms.length){var sc=score(d,keys,extra); if(sc>=2.5)sims.push({d:d,sc:sc});}
     });
+    if(terms.length){
+      sims.sort(function(x,y){return y.sc-x.sc;});
+      var limit=shown?2:4;
+      sims.slice(0,limit).forEach(function(o){
+        var d=o.d; d.tr.hidden=false; d.tr.classList.add('sim'); simN++;
+        var tg=document.createElement('span'); tg.className='tag sim-t sm'; tg.textContent='비슷한 질문';
+        d.qcell.insertBefore(tg,d.qcell.firstChild); d.qcell.insertBefore(document.createTextNode(' '),tg.nextSibling);
+        mark(d,keys.concat(extra).filter(function(w){return w.length>=2;}));
+        if(!first)first=d;
+      });
+    }
     groups.forEach(function(g){var tb=g.nextElementSibling.querySelectorAll('tbody tr:not([hidden])').length;g.hidden=!tb;g.nextElementSibling.hidden=!tb;});
     toc.hidden=!!terms.length;
-    if(terms.length){res.hidden=false;res.textContent=shown?('"'+input.value.trim()+'" 검색 결과 '+shown+'개 · 번호를 누르면 자세한 답변으로 이동해요'):'"'+input.value.trim()+'"에 맞는 질문이 없어요. 다른 단어로 찾아보세요.';}
-    else{res.hidden=true;}
+    if(terms.length){
+      res.hidden=false; var q='"'+input.value.trim()+'"';
+      if(shown&&simN)res.textContent=q+' 검색 결과 '+shown+'개 · 비슷한 질문 '+simN+'개 · 번호를 누르면 자세한 답변으로 이동해요';
+      else if(shown)res.textContent=q+' 검색 결과 '+shown+'개 · 번호를 누르면 자세한 답변으로 이동해요';
+      else if(simN)res.textContent=q+'와 똑같은 질문은 없지만, 비슷한 질문 '+simN+'개를 찾았어요';
+      else res.textContent=q+'에 맞는 질문이 없어요. 다른 단어로 찾아보세요.';
+    } else res.hidden=true;
     return first;
   }
   input.addEventListener('input',run);
